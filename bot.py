@@ -1,1 +1,77 @@
+import requests
+import time
+from datetime import datetime
 
+BOT_TOKEN = "8492847304:AAFbN-gvCc8Ln2q0AaMq5rxyCK-0nzWDWwg"
+CHANNEL_ID = "-1004398538737"
+CHECK_INTERVAL = 300
+
+def get_gold_price():
+    try:
+        url = "https://query1.finance.yahoo.com/v8/finance/chart/GC=F"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        response = requests.get(url, headers=headers, timeout=10)
+        data = response.json()
+        price = data["chart"]["result"][0]["meta"]["regularMarketPrice"]
+        return round(price, 2)
+    except:
+        return None
+
+def send_telegram(message):
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        payload = {"chat_id": CHANNEL_ID, "text": message, "parse_mode": "HTML"}
+        requests.post(url, json=payload, timeout=10)
+    except Exception as e:
+        print(f"Send error: {e}")
+
+def is_weekend():
+    day = datetime.utcnow().weekday()
+    return day >= 5
+
+def analyze_signal(current_price, previous_price):
+    if previous_price is None:
+        return None
+    change = current_price - previous_price
+    change_pct = (change / previous_price) * 100
+    now = datetime.utcnow().strftime("%H:%M UTC")
+    if change_pct >= 0.15:
+        signal = "🟢 BUY SIGNAL"
+        tp1 = round(current_price + 5, 2)
+        tp2 = round(current_price + 10, 2)
+        sl = round(current_price - 8, 2)
+        emoji = "📈"
+    elif change_pct <= -0.15:
+        signal = "🔴 SELL SIGNAL"
+        tp1 = round(current_price - 5, 2)
+        tp2 = round(current_price - 10, 2)
+        sl = round(current_price + 8, 2)
+        emoji = "📉"
+    else:
+        return None
+    message = f"{emoji} <b>GOLD (XAUUSD) {signal}</b> {emoji}\n\n💰 <b>Price:</b> ${current_price}\n✅ <b>TP1:</b> ${tp1}\n✅ <b>TP2:</b> ${tp2}\n❌ <b>SL:</b> ${sl}\n📊 <b>Change:</b> {change_pct:+.2f}%\n🕐 <b>Time:</b> {now}\n\n⚠️ <i>Risk management মেনে trade করুন!</i>\n📌 @goldrana_signals"
+    return message
+
+def main():
+    print("Bot চালু!")
+    send_telegram("🤖 <b>Gold Signal Bot চালু হয়েছে!</b>\n\nপ্রতি ৫ মিনিটে সিগন্যাল পাবেন। 📊")
+    previous_price = None
+    while True:
+        try:
+            if is_weekend():
+                print("Weekend - অপেক্ষা...")
+                time.sleep(CHECK_INTERVAL)
+                continue
+            current_price = get_gold_price()
+            if current_price:
+                print(f"Gold: ${current_price}")
+                signal_msg = analyze_signal(current_price, previous_price)
+                if signal_msg:
+                    send_telegram(signal_msg)
+                previous_price = current_price
+        except Exception as e:
+            print(f"Error: {e}")
+        time.sleep(CHECK_INTERVAL)
+
+if __name__ == "__main__":
+    main()
